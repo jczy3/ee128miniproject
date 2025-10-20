@@ -1,0 +1,137 @@
+/* ###################################################################
+** Filename    : main.c
+** Project     : IDS
+** Processor   : MK64FN1M0VLL12
+** Version     : Driver 01.01
+** Compiler    : GNU C Compiler
+** Abstract    :
+** Main module.
+** This module contains user's application code.
+** ###################################################################*/
+
+/*!
+** @file main.c
+** @version 01.01
+** @brief Main module. This module contains user's application code.
+*/
+
+/*!
+** @addtogroup main_module main module documentation
+** @{
+*/
+
+/* MODULE main */
+
+/* Including needed modules to compile this module/procedure */
+#include "Cpu.h"
+#include "Events.h"
+#include "Pins1.h"
+#include "FX1.h"
+#include "GI2C1.h"
+#include "WAIT1.h"
+#include "CI2C1.h"
+#include "CsIO1.h"
+#include "IO1.h"
+#include "MCUC1.h"
+#include "SM1.h"
+#include "MK64F12.h"
+
+/* Including shared modules, which are used for whole project */
+#include "PE_Types.h"
+#include "PE_Error.h"
+#include "PE_Const.h"
+#include "IO_Map.h"
+#include "PDD_Includes.h"
+#include "Init_Config.h"
+
+/* User includes (#include below this line is not maintained by Processor Expert) */
+/*lint -save -e970 Disable MISRA rule (6.3) checking. */
+
+unsigned char write[512];
+
+// OUT1 - RED
+// OUT2 - YELLOW
+// OUT3 - GREY
+// OUT4 - GREEN
+const unsigned char step_sequence[4] = {0x1B, 0x17, 0x87, 0x8B};
+// const unsigned char step_sequence[8] = {0x13, 0x1B, 0x0B, 0x8B,0x83, 0x87, 0x07, 0x17};
+
+unsigned long slowDelay = 0x10000;  /* Delay Value */
+unsigned long fastDelay = 0x1000;
+
+void software_delay(unsigned long delay) {
+    while (delay > 0)
+        delay--;
+}
+
+int main(void) {
+    /*lint -restore Enable MISRA rule (6.3) checking. */
+
+    /*** Processor Expert internal initialization. DON'T REMOVE THIS CODE!!! ***/
+    PE_low_level_init();
+    /*** End of Processor Expert internal initialization. ***/
+
+    /* Local variable definitions */
+    uint32_t delay;
+    uint8_t ret, who;
+    int8_t temp;
+    int16_t accX, accY, accZ;
+    int16_t magX, magY, magZ;
+    int len;
+
+    LDD_TDeviceData *SM1_DeviceData;
+    SM1_DeviceData = SM1_Init(NULL);
+
+    printf("Hello\n");
+
+    FX1_Init();
+
+    // Enable clocks for Port B and Port C
+    SIM_SCGC5 |= SIM_SCGC5_PORTB_MASK;  // Port B clock enable
+    SIM_SCGC5 |= SIM_SCGC5_PORTC_MASK;  // Port C clock enable
+
+    // Configure GPIO pins
+    PORTB_GPCLR = 0x00040100;           // Port B Pin 2 as GPIO
+    PORTC_GPCLR = 0x009F0100;           // Port C Pins 0-4, 7 as GPIO
+    GPIOB_PDDR = 0x00000000;            // Port B as input
+    GPIOC_PDDR = 0x000000FF;            // Port C as output
+    GPIOC_PDOR = 0x03;                  // EN A and EN B
+
+    for (;;) {
+        if (FX1_WhoAmI(&who) != ERR_OK) {
+            return ERR_FAILED;
+        }
+
+        printf("Who Am I value in decimal \t: %4d\n", who);
+        len = sprintf(write, "Who Am I value in decimal \t: %4d\n", who);
+        SM1_SendBlock(SM1_DeviceData, &write, len);
+
+        for (delay = 0; delay < 300000; delay++);
+
+        int rot_dir = GPIOB_PDIR & 0x04;
+
+        if (rot_dir == 0) {
+            for (int j = 0; j < 4; j++) {
+                GPIOC_PDOR = step_sequence[j];
+                software_delay(slowDelay);
+            }
+        } else {
+            for (int j = 3; j >= 0; j--) {
+                GPIOC_PDOR = step_sequence[j];
+                software_delay(slowDelay);
+            }
+        }
+    }
+
+    /*** Don't write any code past this line, or it will be deleted during code generation. ***/
+
+    /*** RTOS startup code. Macro PEX_RTOS_START is defined by the RTOS component. DON'T MODIFY THIS CODE!!! ***/
+#ifdef PEX_RTOS_START
+    PEX_RTOS_START(); /* Startup of the selected RTOS. Macro is defined by the RTOS component. */
+#endif
+    /*** End of RTOS startup code. ***/
+
+    for (;;) {}
+
+    /*** Processor Expert end of main routine. DON'T WRITE CODE BELOW!!! ***/
+} /*** End of main routine. DO NOT MODIFY THIS TEXT!!! ***/
