@@ -1,50 +1,70 @@
 #include <SPI.h>
-char buff [255];
+
+char buff[255];
 volatile byte indx;
 volatile boolean process;
+
 const int trigPin = 5;
 const int echoPin = 6;
 const int buzzerPin = 3;
+
 int pwmValue;
 int duration;
 int distance;
-void setup (void) {
- Serial.begin (115200);
- pinMode(MISO, OUTPUT);
- SPCR |= _BV(SPE);
- indx = 0;
- process = false;
- SPI.attachInterrupt();
- pinMode(trigPin, OUTPUT);
- pinMode(echoPin, INPUT);
-}
-ISR (SPI_STC_vect)
-{
- byte c = SPDR;
- if (indx < sizeof(buff)) {
- buff[indx++] = c;
- if (c == '\n') {
- buff[indx - 1] = 0;
- process = true;
- }
- }
- digitalWrite(trigPin, LOW);
- delayMicroseconds(2);
 
- digitalWrite(trigPin, HIGH);
- delayMicroseconds(10);
- digitalWrite(trigPin, LOW);
- duration = pulseIn(echoPin, HIGH);
-distance = duration / 58.2;
- if (distance > 20) {
- pwmValue = 0;
- } else if (distance <= 20 && distance > 0) {
- pwmValue = map(distance, 0, 20, 255, 0);
- } else {
- pwmValue = 255;
- }
- analogWrite(9, pwmValue);
- analogWrite(buzzerPin, pwmValue);
+void setup(void) {
+    Serial.begin(115200);
+
+    pinMode(MISO, OUTPUT);        // Set MISO as output for SPI slave
+    SPCR |= _BV(SPE);             // Enable SPI in slave mode
+
+    indx = 0;
+    process = false;
+
+    SPI.attachInterrupt();        // Enable SPI interrupt
+
+    pinMode(trigPin, OUTPUT);     // Ultrasonic trigger pin
+    pinMode(echoPin, INPUT);      // Ultrasonic echo pin
 }
-void loop (void) {
+
+// SPI interrupt service routine
+ISR(SPI_STC_vect) {
+    byte c = SPDR;
+
+    if (indx < sizeof(buff)) {
+        buff[indx++] = c;
+
+        if (c == '\n') {
+            buff[indx - 1] = 0;   // Replace newline with null terminator
+            process = true;
+        }
+    }
+
+    // Trigger ultrasonic sensor
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    // Read echo duration
+    duration = pulseIn(echoPin, HIGH);
+    distance = duration / 58.2;  // Convert duration to distance in cm
+
+    // Calculate PWM based on distance
+    if (distance > 20) {
+        pwmValue = 0;
+    } else if (distance <= 20 && distance > 0) {
+        pwmValue = map(distance, 0, 20, 255, 0);
+    } else {
+        pwmValue = 255;
+    }
+
+    analogWrite(9, pwmValue);            // Output to pin 9 (e.g., LED or motor)
+    analogWrite(buzzerPin, pwmValue);    // Output to buzzer
+}
+
+void loop(void) {
+    // Nothing to do in loop – everything handled in ISR
 }
